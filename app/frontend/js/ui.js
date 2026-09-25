@@ -90,7 +90,16 @@ const Belanja = (() => {
     return err.message;
   }
 
-  return { request, setAuthFlag, clearAuthFlag, hasAuthFlag, fieldError, clearCachedMe };
+  return {
+    request,
+    setAuthFlag,
+    clearAuthFlag,
+    hasAuthFlag,
+    fieldError,
+    getCachedMe,
+    setCachedMe,
+    clearCachedMe,
+  };
 })();
 
 // ---- Shared UI helpers -------------------------------------------------
