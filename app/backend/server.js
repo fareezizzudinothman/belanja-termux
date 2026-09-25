@@ -113,7 +113,11 @@ if (fs.existsSync(FRONTEND_DIR)) {
   const setHeaders = (res, filePath) => {
     if (filePath.endsWith('service-worker.js')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-    } else if (/\.(css|js|png|jpe?g|svg|ico|woff2?)$/.test(filePath)) {
+    } else if (/\.(css|js)$/.test(filePath)) {
+      // JS/CSS revalidate on every load (ETag/Last-Modified still sent), so a
+      // deployed fix can never be stuck behind a long-lived HTTP cache.
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate')
+    } else if (/\.(png|jpe?g|svg|ico|woff2?)$/.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=3600')
     }
   }

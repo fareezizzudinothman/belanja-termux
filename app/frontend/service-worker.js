@@ -3,7 +3,7 @@
 // Belanja service worker - static-shell caching only.
 // Never caches API/auth/user data.
 
-const CACHE = 'belanja-static-v2';
+const CACHE = 'belanja-static-v3';
 
 const PRECACHE_URLS = [
   '/',
@@ -38,7 +38,14 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then((cache) =>
+        Promise.all(
+          // fetch(..., { cache: 'reload' }) bypasses the HTTP cache so a
+          // re-precache after deployment always gets the CURRENT bytes - never
+          // a stale 304 that would make cache.addAll reject and kill the update.
+          PRECACHE_URLS.map((url) => fetch(url, { cache: 'reload' }).then((res) => cache.put(url, res)))
+        )
+      )
       .then(() => self.skipWaiting())
   );
 });
@@ -92,20 +99,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache-first, then network + cache fill.
+  // Static assets: stale-while-revalidate - always answer from the cache
+  // immediately, but refresh it from the network in the background so that
+  // deployments self-heal (an old JS file can never stay cached forever).
   event.respondWith(
-    caches.match(req).then(
-      (hit) =>
-        hit ||
-        fetch(req)
-          .then((res) => {
-            if (res.ok) {
-              const copy = res.clone();
-              caches.open(CACHE).then((cache) => cache.put(req, copy));
-            }
-            return res;
-          })
-          .catch(() => undefined)
-    )
+    caches.match(req).then((hit) => {
+      const network = fetch(req)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => undefined);
+      return hit || network;
+    })
   );
 });
