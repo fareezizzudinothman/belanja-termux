@@ -58,6 +58,11 @@ const config = {
     .map((s) => s.trim())
     .filter(Boolean),
 
+  // Request logging. Default Termux mode is quiet (static files are not
+  // logged, only failed API responses and errors). Set LOG_REQUESTS=true to
+  // log every non-static request with its duration.
+  logRequests: toBool(env.LOG_REQUESTS, false),
+
   // Rate limiting (requests per 15-minute window per IP).
   rateLimit: {
     auth: Number(env.RATE_LIMIT_AUTH || 300), // /api/auth (includes /me on every page load)

@@ -3,9 +3,22 @@
 # start-termux.sh - start Belanja natively in Termux.
 #
 # Verifies PostgreSQL is running and reachable, checks dependencies, applies
-# pending migrations, then starts the app in the FOREGROUND (stop with CTRL+C).
+# pending migrations, then starts the app in the FOREGROUND (stop with CTRL+C
+# or ./scripts/stop-termux.sh).
+#
+# The backend process is tracked by PID file (runtime/belanja.pid): starting
+# while Belanja is already running is refused instead of spawning a second
+# node process, and CTRL+C removes the PID file on shutdown.
 #
 set -e
+
+START_CLOUDFLARE=0
+for arg in "$@"; do
+  case "$arg" in
+    --cloudflare) START_CLOUDFLARE=1 ;;
+    *) echo "Unknown option: $arg (expected --cloudflare or nothing)." >&2; exit 1 ;;
+  esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -13,6 +26,7 @@ APP_DIR="$REPO_DIR/app"
 ENV_FILE="$APP_DIR/.env"
 
 . "$SCRIPT_DIR/lib-postgres.sh"
+. "$SCRIPT_DIR/lib-app.sh"
 
 # Load configuration the app will use (HOST, PORT, DATABASE_URL, ...).
 load_env() {
@@ -81,7 +95,23 @@ echo "pg client:  OK"
 echo "Migrations: applying any pending..."
 (cd "$APP_DIR" && npm run db:migrate)
 
-# --- 6. Foreground start ----------------------------------------------------
+# --- 6. Already running? ----------------------------------------------------
+BELAJA_RUNNING_NODE="$(pgrep -f "node .*/backend/server\.js" 2>/dev/null | wc -l)"
+if [ -n "$(pid_from_file "$BELANJA_PID_FILE")" ]; then
+  echo
+  echo "ERROR: Belanja is already running (pid $(pid_from_file "$BELANJA_PID_FILE"))." >&2
+  echo "       Stop it first with ./scripts/stop-termux.sh." >&2
+  exit 1
+fi
+if [ "${BELAJA_RUNNING_NODE:-0}" -gt 0 ] && [ ! -f "$BELANJA_PID_FILE" ]; then
+  echo
+  echo "ERROR: a Belanja backend process appears to be running but is not tracked" >&2
+  echo "       by $BELANJA_PID_FILE." >&2
+  echo "       Stop it first with ./scripts/stop-termux.sh." >&2
+  exit 1
+fi
+
+# --- 7. Foreground start ----------------------------------------------------
 echo
 echo "Backend:    Starting..."
 echo
@@ -92,6 +122,30 @@ echo
 echo "Press CTRL+C to stop."
 echo
 
-# Start in the foreground so CTRL+C stops it cleanly (the server also shuts
-# down gracefully on SIGINT).
-exec env HOST="$HOST" PORT="$PORT" npm --prefix "$APP_DIR" start
+# Run node directly (not through npm) so the PID file points at the real server
+# process, and clean the PID file up when it exits via CTRL+C / SIGTERM.
+(
+  cd "$APP_DIR/backend" || exit 1
+  exec env HOST="$HOST" PORT="$PORT" node server.js
+) &
+APP_PID=$!
+write_pid "$BELANJA_PID_FILE" "$APP_PID"
+
+CLEANUP_CLOUDFLARE=0
+if [ "$START_CLOUDFLARE" -eq 1 ]; then
+  echo
+  echo "Cloudflare: starting tunnel..."
+  "$SCRIPT_DIR/start-cloudflare.sh"
+  CLEANUP_CLOUDFLARE=1
+fi
+
+cleanup() {
+  rm -f "$BELANJA_PID_FILE"
+  if [ "$CLEANUP_CLOUDFLARE" -eq 1 ]; then
+    "$SCRIPT_DIR/stop-cloudflare.sh" >/dev/null 2>&1 || true
+  fi
+}
+forward() { kill "$APP_PID" 2>/dev/null || true; exit 0; }
+trap 'forward' INT TERM
+trap 'cleanup' EXIT
+wait "$APP_PID"

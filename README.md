@@ -43,11 +43,18 @@ What the script does, automatically and idempotently:
 ./scripts/start-termux.sh    # starts Postgres + the app in the foreground
 ```
 
-Open **http://127.0.0.1:3000** and register an account. Press `Ctrl+C` to stop the app; the script stops cleanly.
+Open **http://127.0.0.1:3000** and register an account. Press `Ctrl+C` to stop the app; the script stops cleanly and removes its PID file.
 
 ```bash
-./scripts/stop-termux.sh     # stops the Postgres server too
+./scripts/stop-termux.sh              # stops the Belanja app only (via PID file)
+./scripts/stop-termux.sh --postgres   # stops Belanja + the Postgres server
 ```
+
+> Process management is **PID-file based** (see `scripts/lib-app.sh`). `stop-termux.sh`
+> stops exactly the Belanja node process recorded at start — it never runs
+> `pkill node`/`killall node`, and PostgreSQL is left running unless you pass
+> `--postgres`. Starting while the app is already running is refused (no
+> duplicate node processes).
 
 Useful operators (all idempotent / safe to re-run):
 
@@ -56,15 +63,37 @@ Useful operators (all idempotent / safe to re-run):
 | Update the app | `git -C <repo> pull && ./scripts/setup-termux.sh` |
 | Re-run migrations | `cd app && npm run db:migrate` |
 | Migration status | `cd app && npm run db:status` |
+| Request logs (verbose) | `LOG_REQUESTS=true ./scripts/start-termux.sh` |
 | Postgres status | `pg_ctl -D $PREFIX/var/lib/postgresql status` |
 | Backup (SQL dump) | `pg_dump -U belanja belanja -f belanja-backup.sql` |
 | Restore (fresh DB) | `psql -U belanja -d belanja -f belanja-backup.sql` |
 
+### Expose the app publicly (Cloudflare Tunnel, optional)
+
+A native Termux `cloudflared` connector exposes the app over a public HTTPS URL
+without opening any inbound ports. Configure it once, then start it with the app:
+
+```bash
+# 1. On the Cloudflare Zero Trust dashboard: Networks -> Tunnels -> Create a
+#    tunnel; add a Public Hostname -> service HTTP ->  http://127.0.0.1:3000.
+./scripts/setup-cloudflare.sh        # paste the tunnel token here (stored
+                                     #  chmod 600 in .config/cloudflared.env)
+./scripts/start-termux.sh --cloudflare   # app + tunnel
+# or, everything in one go:
+./scripts/start-all-termux.sh        # PG -> app -> tunnel (if token exists)
+```
+
+The token is only ever stored in `.config/cloudflared.env` (`chmod 600`,
+git-ignored) and is never printed, logged or committed. Stop the tunnel with
+`./scripts/stop-cloudflare.sh`.
+
 ### How the pieces fit together
 
 - **`scripts/lib-postgres.sh`** — shared POSIX-sh helpers (`pg_start`, `pg_stop`, `pg_ensure_role`, `pg_ensure_db`) used by all the scripts. Data lives in `$PREFIX/var/lib/postgresql`, the socket in `$PREFIX/tmp`, logs in `$PREFIX/var/log/belanja-postgresql.log`.
+- **`scripts/lib-app.sh`** — PID-file helpers for the app's own processes (backend + cloudflared) under `runtime/` so stop helpers are surgical.
 - **`scripts/setup-termux.sh`** — one-shot provisioning. Safe to re-run after a `git pull`.
-- **`scripts/start-termux.sh`** — starts Postgres (if not already running), waits for readiness, runs migrations, then execs the backend in the foreground with `HOST=127.0.0.1` and `PORT=3000` from `.env`.
+- **`scripts/start-termux.sh`** — starts Postgres (if not already running), waits for readiness, runs migrations, then starts the backend in the foreground with `HOST=127.0.0.1` and `PORT=3000` from `.env`; loads `--cloudflare` when asked, tears the tunnel down with the app on exit.
+- **`scripts/start-all-termux.sh`** — starts Postgres → applies migrations → starts the app → starts the tunnel if a token is configured.
 - **Backend static hosting** — `backend/server.js` serves `../frontend` directly with cache headers (`service-worker.js` → `no-store`, static assets → `public, max-age=3600`) and an SPA fallback for non-`/api` GET routes, replacing what nginx used to do in the Docker setup.
 
 > **Docker removed.** This repo no longer ships `Dockerfile`, `docker-compose.yml`, `nginx/` or `.dockerignore` — the Termux-native setup is the only supported run mode. The Docker documentation sections below (Architecture, Docker Architecture, Installation, Start/Stop, Cloudflare Tunnel) describe the previous Docker layout and are kept for historical reference only.
@@ -486,12 +515,13 @@ Served cache control (nginx):
 | static css/js/png/gif/svg/ico/woff | `public, max-age=3600` |
 | `/api/*` | `no-store` (set by the Express API) |
 
-The service worker uses one versioned cache, `belanja-static-v1`, purged on every deploy/new version:
+The service worker uses one versioned cache, `belanja-static-v2`, purged on every deploy/new version:
 
-- **Install** — precaches the HTML shell (all 9 pages + offline.html), `style.css`, all `js/`, the manifest and icons.
+- **Install** — precaches the HTML shell (all 10 pages + offline.html), `style.css`, all `js/`, the manifest and icons.
 - **Static requests** — cache-first, falling back to the network and caching successful responses.
 - **`/api/*`** — never intercepted; **network only**, so personal expense data, the session and anything sensitive is never stored in the browser cache. No JWTs/passwords/expense rows are written to `localStorage`/IndexedDB (verified by the PWA test).
-- **Navigations** — network-first; when offline the app falls back to a built-in `offline.html` ("You're offline / Reconnect to the internet to access your latest expense data.").
+- **Navigations** — **stale-while-revalidate**: the precached shell is rendered instantly on every page turn (no waiting on a network round-trip — the main speed fix for slow Termux/`cloudflared` navigation), then revalidated from the network in the background so the next visit is fresh. Query-string variants like `/monthly.html?year=2026&month=9` are cached under a single normalized key (`/monthly.html`) so the cache stays bounded. When the network is unreachable the offline page is shown.
+- Offline: the static shell still works; data views need the network (API data is purposefully not cached).
 - Old `belanja-static-*` caches are removed on `activate`; `skipWaiting` + `clients.claim` make updates apply immediately.
 
 ### Offline behaviour
@@ -1082,9 +1112,9 @@ Verified in code:
 
 ## Testing
 
-All suites below pass against the running Docker stack (`nginx` on `:8080`, migrations applied). The tests are committed in the repository under `app/tests/` and are driven from the project root (`app/`) via the scripts in `app/package.json`.
+All suites below pass against the running native Termux backend (started with `./scripts/start-termux.sh`, migrations auto-applied). The tests are committed in the repository under `app/tests/` and are driven from the project root (`app/`) via the scripts in `app/package.json`.
 
-**Before running:** start the stack first — `docker compose up -d --build` and wait for `backend` to be `(healthy)`. The API suites need only `node`; the browser suites additionally need **Docker** (they launch Chromium inside the Playwright image) and a `host.docker.internal` mapping (`--add-host` is already in the scripts).
+**Before running:** start the app first — `./scripts/start-termux.sh`. The API suites need only `node` (point them at the running app with `BASE_URL=http://127.0.0.1:3000 npm test:api`); the browser suites additionally need **Docker** (they launch Chromium inside the Playwright image) and a `host.docker.internal` mapping (`--add-host` is already in the scripts), with `BASE_URL` set to the app's host port.
 
 ### Run everything
 
@@ -1110,7 +1140,7 @@ npm test        # test:api first, then test:browser
 | Browser — monthly series | `npm run test:browser:series` | regression: previous month stays `0`, current month never inherits another month's total, read-only GET creates nothing, range label renders a real en-dash `–` (not `&ndash;`) | **ALL REGRESSION CHECKS PASSED (11/11)** |
 | Browser — monthly UI lifecycle | `npm run test:browser:monthly-ui` | Chromium: NOT OPEN → Open (badge + buttons) → FUTURE read-only → back to OPEN → close → reload stays closed → reopen → add expense → ancient month untouched → no console errors | **ALL UI TESTS PASSED** |
 | Browser — close confirm | `npm run test:browser:close-confirm` | regression (Test B): Open / Close / Reopen confirmations name the real month — `Close September 2026?` when the current month is 2026-09 (no `?year=&month=` params, no `December 1899`), correct across hard-reload & the reopen→close cycle | **ALL CLOSE-CONFIRM TESTS PASSED** |
-| Browser — mobile + PWA | `npm run test:browser:mobile-pwa` | Chromium at 375×667, 390×844 and 412×915: login/dashboard/monthly/fixed/installments/profile show **no horizontal overflow**; bottom navigation (Dashboard \| Monthly \| Expenses \| More) works; monthly Open/Add/Close/Reopen confirm the real month name; tables render as labelled mobile cards; **PWA**: manifest (name/display/theme/icons/maskable), service worker registers + controls the page, static assets precached and served from cache **while offline**, `/api/*` never cached, offline fallback page shown, no localStorage user data | **ALL MOBILE+PWA TESTS PASSED** |
+| Browser — mobile + PWA | `npm run test:browser:mobile-pwa` | Chromium at 375×667, 390×844 and 412×915: login/dashboard/monthly/fixed/installments/profile show **no horizontal overflow**; bottom navigation (Dashboard \| Monthly \| Expenses \| More) works; monthly Open/Add/Close/Reopen confirm the real month name; tables render as labelled mobile cards; **PWA**: manifest (name/display/theme/icons/maskable), service worker registers + controls the page, static assets precached and served from cache **while offline**, `/api/*` never cached, cached page shells render offline (stale-while-revalidate) with the offline fallback page for unknown paths, no localStorage user data | **ALL MOBILE+PWA TESTS PASSED** |
 | All browser suites | `npm run test:browser` | the six suites above in sequence | **ALL BROWSER SUITES PASSED** |
 | Health check | `curl http://localhost:8080/api/health` | DB connectivity | `"status":"ok","database":"connected"` |
 

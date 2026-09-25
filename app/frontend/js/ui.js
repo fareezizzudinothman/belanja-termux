@@ -7,6 +7,12 @@
 
 const Belanja = (() => {
   const AUTH_FLAG = 'belanja_authed';
+  const ME_CACHE_KEY = 'belanja_me_cache';
+  // Short server-confirmed cache for GET /api/auth/me so page navigations do
+  // not fire a duplicate auth round-trip. The server remains authoritative:
+  // the cached payload is only used to render the shell while every data
+  // endpoint re-validates the httpOnly cookie anyway.
+  const ME_CACHE_TTL_MS = 60_000;
 
   function setAuthFlag() {
     document.cookie = `${AUTH_FLAG}=1; path=/; max-age=604800; samesite=strict`;
@@ -16,6 +22,29 @@ const Belanja = (() => {
   }
   function hasAuthFlag() {
     return document.cookie.split('; ').some((c) => c.startsWith(`${AUTH_FLAG}=1`));
+  }
+
+  function getCachedMe() {
+    try {
+      const raw = sessionStorage.getItem(ME_CACHE_KEY);
+      if (!raw) return null;
+      const { at, user } = JSON.parse(raw);
+      if (!user || typeof at !== 'number' || Date.now() - at > ME_CACHE_TTL_MS) {
+        clearCachedMe();
+        return null;
+      }
+      return user;
+    } catch {
+      return null;
+    }
+  }
+  function setCachedMe(user) {
+    try {
+      sessionStorage.setItem(ME_CACHE_KEY, JSON.stringify({ at: Date.now(), user }));
+    } catch { /* storage unavailable: always fetch live */ }
+  }
+  function clearCachedMe() {
+    try { sessionStorage.removeItem(ME_CACHE_KEY); } catch { /* ignore */ }
   }
 
   async function request(path, { method = 'GET', body } = {}) {
@@ -37,6 +66,7 @@ const Belanja = (() => {
 
     if (res.status === 401) {
       clearAuthFlag();
+      clearCachedMe();
       const onAuthPage = /(login|register)\.html/.test(location.pathname);
       if (!onAuthPage) location.href = '/login.html';
       const err = new Error(data.message || 'Please log in.');
@@ -60,7 +90,7 @@ const Belanja = (() => {
     return err.message;
   }
 
-  return { request, setAuthFlag, clearAuthFlag, hasAuthFlag, fieldError };
+  return { request, setAuthFlag, clearAuthFlag, hasAuthFlag, fieldError, clearCachedMe };
 })();
 
 // ---- Shared UI helpers -------------------------------------------------
@@ -135,8 +165,11 @@ const UI = (() => {
 
   // Renders the app shell (topbar + nav). Returns the current user.
   async function initShell(activePath) {
-    const data = await Belanja.request('/auth/me');
-    const user = data.user;
+    // Reuse the short-lived server-confirmed /auth/me for rapid page
+    // navigations; a 401 or expiry clears it and bounces to login anyway.
+    const cached = Belanja.getCachedMe();
+    const user = cached || (await Belanja.request('/auth/me')).user;
+    if (!cached) Belanja.setCachedMe(user);
 
     const header = document.createElement('header');
     header.className = 'topbar';
@@ -187,6 +220,7 @@ const UI = (() => {
     $('#logout-btn').addEventListener('click', async () => {
       try { await Belanja.request('/auth/logout', { method: 'POST' }); } catch { /* offline */ }
       Belanja.clearAuthFlag();
+      Belanja.clearCachedMe();
       location.href = '/login.html';
     });
 

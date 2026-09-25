@@ -28,6 +28,7 @@
         method: 'POST',
         body: data,
       });
+      Belanja.clearCachedMe();
       Belanja.setAuthFlag();
       location.href = '/dashboard.html';
       void res;

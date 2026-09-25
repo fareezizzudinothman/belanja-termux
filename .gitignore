@@ -21,3 +21,7 @@ logs/
 *_pgdata/
 *.dump
 *.sql.gz
+
+# Runtime artifacts / PIDs / private config (see scripts/lib-app.sh)
+runtime/
+.config/cloudflared.env

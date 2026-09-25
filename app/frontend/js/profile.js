@@ -17,6 +17,7 @@
         method: 'PUT',
         body: Object.fromEntries(new FormData(e.target).entries()),
       });
+      Belanja.clearCachedMe();
       UI.toast('Name updated', 'success');
     } catch (err) {
       $('#p-error').textContent = Belanja.fieldError(err);
@@ -28,6 +29,7 @@
   $('#p-logout').addEventListener('click', async () => {
     try { await Belanja.request('/auth/logout', { method: 'POST' }); } catch { /* offline */ }
     Belanja.clearAuthFlag();
+    Belanja.clearCachedMe();
     location.href = '/login.html';
   });
 })();

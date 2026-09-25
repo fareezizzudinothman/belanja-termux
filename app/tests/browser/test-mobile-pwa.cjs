@@ -241,7 +241,7 @@ const proxy = http.createServer((req, res) => {
       const offline = await caches.match('/offline.html');
       return { keys, hasStyle: !!style, hasApi: !!api, hasOffline: !!offline };
     });
-    check('cache "belanja-static-v1" exists', cacheInfo.keys.includes('belanja-static-v1'), cacheInfo.keys.join(','));
+    check('cache "belanja-static-v2" exists', cacheInfo.keys.includes('belanja-static-v2'), cacheInfo.keys.join(','));
     check('css/style.css is precached', cacheInfo.hasStyle);
     check('offline.html is precached', cacheInfo.hasOffline);
     check('/api/* is NEVER cached', !cacheInfo.hasApi);
@@ -285,7 +285,15 @@ const proxy = http.createServer((req, res) => {
     await cdp.send('Network.enable');
     await cdp.send('Network.clearBrowserCache');
     proxy.emulateOffline = true;
+
+    // Stale-while-revalidate: a previously-visited page's cached shell is
+    // served immediately even while offline (data calls still fail upstream).
     await page.goto(BASE + '/dashboard.html', { waitUntil: 'load' });
+    const cachedShell = await page.evaluate(() => document.readyState === 'complete' && !document.body.textContent.includes("You're offline"));
+    check('cached page shell loads from cache while offline', cachedShell);
+
+    // Unknown paths that were never precached fall back to the offline page.
+    await page.goto(BASE + '/no-such-page-offline-test.html', { waitUntil: 'load' });
     const offlineNav = await page.evaluate(() => document.body.textContent.includes("You're offline"));
     check('offline navigation falls back to the offline page', offlineNav);
 

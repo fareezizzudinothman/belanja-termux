@@ -7,13 +7,24 @@ const { config } = require('../config')
 // across the whole app, so every caller uses this single helper instead of
 // UTC/local clock tricks. All monthly lifecycle rules (current month, editable
 // window, auto-close) are computed from these calendar parts.
+
+// Intl.DateTimeFormat is expensive to construct; cache one per timezone so the
+// hot request paths (dashboard, monthly reads, auto-close) do not rebuild it on
+// every call.
+const formatterCache = new Map()
+
 function partsIn(timeZone, date) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(date)
+  let formatter = formatterCache.get(timeZone)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+    formatterCache.set(timeZone, formatter)
+  }
+  const parts = formatter.formatToParts(date)
   const get = (type) => parts.find((p) => p.type === type)?.value
   return { year: Number(get('year')), month: Number(get('month')), day: Number(get('day')) }
 }

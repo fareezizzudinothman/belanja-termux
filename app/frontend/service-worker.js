@@ -3,7 +3,7 @@
 // Belanja service worker - static-shell caching only.
 // Never caches API/auth/user data.
 
-const CACHE = 'belanja-static-v1';
+const CACHE = 'belanja-static-v2';
 
 const PRECACHE_URLS = [
   '/',
@@ -20,6 +20,8 @@ const PRECACHE_URLS = [
   '/manifest.json',
   '/css/style.css',
   '/js/ui.js',
+  '/js/index.js',
+  '/js/auth.js',
   '/js/dashboard.js',
   '/js/monthly.js',
   '/js/fixed-expenses.js',
@@ -64,18 +66,28 @@ self.addEventListener('fetch', (event) => {
   // Never touch API/auth/user data - network only.
   if (url.pathname.startsWith('/api/')) return;
 
-  // Navigations: network-first, fall back to the offline page when offline.
+  // Navigations: stale-while-revalidate. Serve the precached/known shell
+  // (including query-string variants like /monthly.html?year=&month=) from the
+  // cache immediately, then revalidate it in the background so the next visit
+  // is even fresher. Offline still falls back to the built-in offline page.
   if (req.mode === 'navigate') {
+    const normalize = new URL(url.origin);
+    normalize.pathname = url.pathname;
+    const shell = new Request(normalize.toString());
+
     event.respondWith(
-      fetch(req)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match('/offline.html'))
+      caches.match(shell).then((cached) => {
+        const network = fetch(req)
+          .then((res) => {
+            if (res.ok) {
+              const copy = res.clone();
+              caches.open(CACHE).then((cache) => cache.put(shell, copy));
+            }
+            return res;
+          })
+          .catch(() => cached || caches.match('/offline.html'));
+        return cached || network;
+      })
     );
     return;
   }
