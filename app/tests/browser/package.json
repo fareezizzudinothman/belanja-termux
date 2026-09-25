@@ -1,0 +1,13 @@
+{
+  "name": "belanja-browser-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright browser tests for Belanja. Run inside the mcr.microsoft.com/playwright:v1.45.0-noble container - browsers are preinstalled there (install with PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1).",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node test-pw.cjs && node test-dashboard-installments.cjs && node test-dashboard-series.cjs"
+  },
+  "dependencies": {
+    "playwright": "1.45.0"
+  }
+}

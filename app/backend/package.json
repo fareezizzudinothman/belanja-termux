@@ -1,0 +1,27 @@
+{
+  "name": "belanja-backend",
+  "version": "1.0.0",
+  "description": "Belanja - personal monthly expense management backend (Express + PostgreSQL)",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "db:migrate": "node db/migrate.js",
+    "db:status": "node db/migrate.js --status",
+    "check": "node --check server.js && node --check db/pool.js && node --check db/migrate.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1"
+  }
+}

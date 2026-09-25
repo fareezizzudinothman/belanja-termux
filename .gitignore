@@ -1,0 +1,23 @@
+# Environment / secrets (keep .env.example tracked)
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Runtime data / dumps (local PostgreSQL data may live outside the app dir)
+*_pgdata/
+*.dump
+*.sql.gz

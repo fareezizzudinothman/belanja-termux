@@ -1,0 +1,32 @@
+{
+  "name": "belanja",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Belanja - personal monthly expense management app. Test runner entry point (tests live under app/tests/).",
+  "scripts": {
+    "start": "npm --prefix backend run start",
+    "dev": "npm --prefix backend run dev",
+    "check": "npm --prefix backend run check && node --check tests/api/*.mjs && node --check tests/browser/*.cjs",
+    "db:migrate": "npm --prefix backend run db:migrate",
+    "db:status": "npm --prefix backend run db:status",
+    "test": "npm run test:api",
+    "test:api": "node tests/api/test-crud-8080.mjs && node tests/api/test-monthly-8080.mjs && node tests/api/test-monthly-rules-8080.mjs && node tests/api/test-time-rules.cjs && node tests/api/test-dashboard-history-8080.mjs && node tests/api/test-month-ownership-8080.mjs && node tests/api/test-e2e.mjs",
+    "test:api:crud": "node tests/api/test-crud-8080.mjs",
+    "test:api:monthly": "node tests/api/test-monthly-8080.mjs",
+    "test:api:rules": "node tests/api/test-monthly-rules-8080.mjs",
+    "test:api:time": "node tests/api/test-time-rules.cjs",
+    "test:api:dash-history": "node tests/api/test-dashboard-history-8080.mjs",
+    "test:api:month-ownership": "node tests/api/test-month-ownership-8080.mjs",
+    "test:api:e2e": "node tests/api/test-e2e.mjs",
+    "test:all": "npm run test:api && npm run test:browser",
+    "test:browser": "npm run test:browser:main && npm run test:browser:installments && npm run test:browser:series && npm run test:browser:monthly-ui && npm run test:browser:close-confirm && npm run test:browser:mobile-pwa",
+    "test:browser:main": "docker run --rm --add-host host.docker.internal:host-gateway -e BASE_URL='http://host.docker.internal:8080' -v \"$PWD/tests/browser:/app\" -w /app mcr.microsoft.com/playwright:v1.45.0-noble sh -c \"PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1; test -d node_modules/playwright || npm install --no-audit --no-fund; node test-pw.cjs\"",
+    "test:browser:installments": "docker run --rm --add-host host.docker.internal:host-gateway -e BASE_URL='http://host.docker.internal:8080' -v \"$PWD/tests/browser:/app\" -w /app mcr.microsoft.com/playwright:v1.45.0-noble sh -c \"PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1; test -d node_modules/playwright || npm install --no-audit --no-fund; node test-dashboard-installments.cjs\"",
+    "test:browser:series": "docker run --rm --add-host host.docker.internal:host-gateway -e BASE_URL='http://host.docker.internal:8080' -v \"$PWD/tests/browser:/app\" -w /app mcr.microsoft.com/playwright:v1.45.0-noble sh -c \"PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1; test -d node_modules/playwright || npm install --no-audit --no-fund; node test-dashboard-series.cjs\"",
+    "test:browser:monthly-ui": "docker run --rm --add-host host.docker.internal:host-gateway -e BASE_URL='http://host.docker.internal:8080' -v \"$PWD/tests/browser:/app\" -w /app mcr.microsoft.com/playwright:v1.45.0-noble sh -c \"PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1; test -d node_modules/playwright || npm install --no-audit --no-fund; node test-monthly-ui.cjs\"",
+    "test:browser:close-confirm": "docker run --rm --add-host host.docker.internal:host-gateway -e BASE_URL='http://host.docker.internal:8080' -v \"$PWD/tests/browser:/app\" -w /app mcr.microsoft.com/playwright:v1.45.0-noble sh -c \"PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1; test -d node_modules/playwright || npm install --no-audit --no-fund; node test-monthly-close-confirm.cjs\"",
+    "test:browser:mobile-pwa": "docker run --rm --add-host host.docker.internal:host-gateway -e BASE_URL='http://host.docker.internal:8080' -v \"$PWD/tests/browser:/app\" -w /app mcr.microsoft.com/playwright:v1.45.0-noble sh -c \"PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1; test -d node_modules/playwright || npm install --no-audit --no-fund; node test-mobile-pwa.cjs\"",
+    "test:browser:local": "node tests/browser/test-pw.cjs && node tests/browser/test-dashboard-installments.cjs && node tests/browser/test-dashboard-series.cjs && node tests/browser/test-monthly-ui.cjs && node tests/browser/test-monthly-close-confirm.cjs && node tests/browser/test-mobile-pwa.cjs",
+    "check:tests": "node --check tests/api/test-crud-8080.mjs && node --check tests/api/test-monthly-8080.mjs && node --check tests/api/test-monthly-rules-8080.mjs && node --check tests/api/test-time-rules.cjs && node --check tests/api/test-dashboard-history-8080.mjs && node --check tests/api/test-month-ownership-8080.mjs && node --check tests/api/test-e2e.mjs && node --check tests/browser/test-pw.cjs && node --check tests/browser/test-dashboard-installments.cjs && node --check tests/browser/test-dashboard-series.cjs && node --check tests/browser/test-monthly-ui.cjs && node --check tests/browser/test-monthly-close-confirm.cjs && node --check tests/browser/test-mobile-pwa.cjs"
+  }
+}

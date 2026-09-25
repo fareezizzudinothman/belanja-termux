@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Belanja" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/icon-192.png" />
+  <link rel="apple-touch-icon" href="/images/apple-touch-icon.png" />
+  <title>Fixed Expenses &middot; Belanja</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main class="container">
+    <div class="page-head">
+      <div>
+        <h1>Fixed Expenses</h1>
+        <div class="page-sub">Recurring monthly costs. Only active items appear in a month until it is closed.</div>
+      </div>
+      <button class="btn primary" id="add-fixed-btn">+ Add Fixed Expense</button>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th><th>Type</th><th class="num">Amount</th><th>Remarks</th><th>Status</th>
+              <th class="num">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="fixed-tbody"></tbody>
+        </table>
+      </div>
+      <div id="fixed-empty"></div>
+    </div>
+  </main>
+
+  <dialog class="modal" id="fixed-modal">
+    <div class="modal-head">
+      <h3 id="fixed-modal-title">Add Fixed Expense</h3>
+      <button class="btn ghost" data-close-fixed>&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="fixed-form" class="form-grid" novalidate>
+        <div class="form-row">
+          <label for="fixed-name">Name</label>
+          <input type="text" id="fixed-name" name="name" required maxlength="150" placeholder="e.g. House rent" />
+        </div>
+        <div class="form-row two">
+          <div class="form-row">
+            <label for="fixed-type">Type</label>
+            <select id="fixed-type" name="type"></select>
+          </div>
+          <div class="form-row">
+            <label for="fixed-amount">Amount (RM)</label>
+            <input type="number" id="fixed-amount" name="amount" min="0" step="0.01" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="fixed-remarks">Remarks</label>
+          <input type="text" id="fixed-remarks" name="remarks" maxlength="1000" />
+        </div>
+        <label class="row-flex" style="gap:8px;">
+          <input type="checkbox" id="fixed-active" name="active" checked style="width:auto;" />
+          <span>Active (counted in open months)</span>
+        </label>
+        <p class="field-error" id="fixed-error"></p>
+        <button type="submit" class="btn primary block">Save</button>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="/js/ui.js"></script>
+  <script src="/js/fixed-expenses.js"></script>
+</body>
+</html>
